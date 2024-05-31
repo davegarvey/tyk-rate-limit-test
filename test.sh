@@ -40,8 +40,8 @@ generate_requests() {
     local requests_total="$3"
     local target_url="$4"
     local api_key="$5"
-    echo -e "\nclients: $clients\nrequests_per_second: $requests_per_second\nrequests_total: $requests_total\napi_key: $api_key\ntarget_url: $target_url\n"
-    hey -c "$clients" -q "$requests_per_second" -n "$requests_total" -H "Authorization: $api_key" "$target_url" #1> /dev/null
+    # echo -e "\nclients: $clients\nrequests_per_second: $requests_per_second\nrequests_total: $requests_total\napi_key: $api_key\ntarget_url: $target_url\n"
+    hey -c "$clients" -q "$requests_per_second" -n "$requests_total" -H "Authorization: $api_key" "$target_url" 1> /dev/null
 }
 
 create_api() {
@@ -49,16 +49,16 @@ create_api() {
   response=$(curl -s -H "Authorization:$DASHBOARD_API_TOKEN" $DASHBOARD_BASE_URL/api/apis -d @$api_data_path)
   status=$(echo "$response" | jq -r '.Status')
   if [ "$status" != "OK" ]; then
-    echo "\nERROR: API creation failed"
     echo "$response"
     exit 1
   else
-    imported_api_id=$(echo "$response" | jq -r '.Meta')
+    api_id=$(echo "$response" | jq -r '.Meta')
     api_listen_path=$(jq -r '.api_definition.proxy.listen_path' "$api_data_path")
     # wait for API to become available on the gateway before returning
     while [ "$(curl -o /dev/null -s -w "%{http_code}" -H "x-tyk-authorization: $GATEWAY_API_TOKEN" $GATEWAY_BASE_URL$api_listen_path)" == "404" ]; do
       sleep 1
-    done 
+    done
+    echo "$api_id"
   fi 
 }
 
@@ -68,7 +68,7 @@ delete_api() {
   status=$(echo "$response" | jq -r '.Status')
 
   if [ "$status" != "OK" ]; then
-    echo -e "\nERROR: key deletion failed"
+    echo -e "\nERROR: API deletion failed ($api_id)"
     echo "$response"
     exit 1
   fi 
@@ -80,7 +80,6 @@ create_key() {
   status=$(echo "$response" | jq -r '.status')
 
   if [ "$status" != "ok" ]; then
-    echo -e "\nERROR: key creation failed"
     echo "$response"
     exit 1
   else
@@ -95,23 +94,37 @@ delete_key() {
   status=$(echo "$response" | jq -r '.status')
 
   if [ "$status" != "ok" ]; then
-    echo -e "\nERROR: key deletion failed"
+    echo -e "\nERROR: key deletion failed ($key)"
     echo "$response"
     exit 1
-  fi 
+  fi
 }
 
 read_key() {
   key="$1"
-  response=$(curl -s -H "x-tyk-authorization:$GATEWAY_API_TOKEN" $GATEWAY_BASE_URL/tyk/keys/$key)
-  echo "res: $response"
-  # status=$(echo "$response" | jq -r '.status')
+  response=$(curl -s -w "%{http_code}" -H "x-tyk-authorization:$GATEWAY_API_TOKEN" -o - $GATEWAY_BASE_URL/tyk/keys/$key)
+  status_code=${response: -3}
+  body=${response:0:$((${#response}-3))}
 
-  # if [ "$status" != "ok" ]; then
-  #   echo -e "\nERROR: key deletion failed"
-  #   echo "$response"
-  #   exit 1
-  # fi 
+  if [ "$status_code" != "200" ]; then
+    echo "$body"
+    exit 1
+  else
+    echo "$body"
+  fi
+}
+
+read_api_by_listen_path() {
+  api_listen_path="$1"
+  response=$(curl -s -H "Authorization:$DASHBOARD_API_TOKEN" $DASHBOARD_BASE_URL/api/apis?p=-1)
+  matching_api=$(echo "$response" | jq -r --arg search_listen_path "$api_listen_path" '.apis[] | select(.api_definition.proxy.listen_path == $search_listen_path)')
+
+  if [ "$matching_api" == "" ]; then
+    echo "$response"
+    exit 1
+  else
+    echo "$matching_api"
+  fi 
 }
 
 get_analytics_data() {
@@ -120,6 +133,8 @@ get_analytics_data() {
     local analytics_url="$DASHBOARD_BASE_URL/api/logs/?start=$from_epoch&p=-1"
     local data=""
     local analytics_count=0
+    local max_retries=5
+    local retry_count=0
 
     while [ "$analytics_count" -ne "$request_count" ]; do
         data=$(curl -s -H "Authorization: $DASHBOARD_API_TOKEN" $analytics_url)
@@ -127,6 +142,13 @@ get_analytics_data() {
         
         # check that there is equivalent amount of analytics records to API requests sent
         if [ "$analytics_count" -ne "$request_count" ]; then
+            ((retry_count++))
+            if [ "$max_retries" -eq "$retry_count" ]; then
+              echo "Max retry count reached ($max_retries)"
+              echo "Analytics record count: $analytics_count"
+              echo "Request count: $request_count"
+              exit 1
+            fi
             # pause, to allow time for analytics data to be processed
             sleep 1
         fi
@@ -157,36 +179,50 @@ for test_plan in "${test_plans_to_run[@]}"; do
     load_rate=$(jq '.target.load.rate' $test_plan_path)
     load_total=$(jq '.target.load.total' $test_plan_path)
 
-    
+    # import data, if defined
     imported_api_id=""
     imported_key=""
     if jq -e 'has("import")' "$test_plan_path" >/dev/null 2>&1; then
       if jq -e '.import | has("api")' "$test_plan_path" >/dev/null 2>&1; then
         api_data_path=$(jq -r '.import.api' "$test_plan_path")
         echo "Creating API \"$(jq -r '.api_definition.name' "$api_data_path")\""
-        create_api $api_data_path
+        imported_api_id=$(create_api $api_data_path)
+        if [ $? -ne 0 ]; then
+            echo -e "ERROR: API creation failed\n$imported_api_id"
+            exit 1
+        fi
       fi
       if jq -e '.import | has("key")' "$test_plan_path" >/dev/null 2>&1; then
         key_data_path=$(jq -r '.import.key' "$test_plan_path")
         echo -n "Creating Key"
         imported_key=$(create_key $key_data_path)
+        if [ $? -ne 0 ]; then
+          echo -e "ERROR: key creation failed\n$imported_key"
+          exit 1
+        fi
         echo " $imported_key"
         if [ "$target_authorization" != "" ]; then
-          echo "WARNING: Created key overrides key defined in test plan. Set test plan 'authorization' value to an empty string to prevet this warning."
+          echo "WARNING: Created key overrides key defined in test plan. Set test plan 'authorization' value to an empty string to prevent this warning."
         fi
+        target_authorization="$imported_key"
       fi
     fi
 
-    # test_data_source=$(jq -r '.dataSource' $test_plan_path)
-    key_file_path=$(jq -r '.import.key' $test_plan_path)
-    api_file_path=$(jq -r '.import.api' $test_plan_path)
-    # TODO: This approach 'first' is a hack to deal with keys that have multiple authz configs.
-    # It needs to be updates to get the correct authz config for the api that is to be tested against.
-    # It only happens to work here because the first rate limit is the same as the API to be tested against.
-    key_rate=$(jq 'first(.access_rights[] | .limit.rate)' $key_file_path)
-    key_rate_period=$(jq 'first(.access_rights[] | .limit.per)' $key_file_path)
+    key_data=$(read_key $target_authorization)
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR: key read failed ($key_data)"
+      exit 1
+    fi
+    target_listen_path=$(jq -r '.target.url' "$test_plan_path" | awk -F'/' '{print $4}')
+    target_api=$(read_api_by_listen_path "/$target_listen_path/")
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR: API read by listen path failed\n$target_api"
+      exit 1
+    fi
+    target_api_api_id=$(echo $target_api | jq -r '.api_definition.api_id')
+    key_rate=$(echo "$key_data" | jq -r --arg api_id "$target_api_api_id" '.access_rights[$api_id].limit.rate')
+    key_rate_period=$(echo "$key_data" | jq -r --arg api_id "$target_api_api_id" '.access_rights[$api_id].limit.per')
     analytics_data=""
-
 
     echo "Generating $load_total requests @ ${load_rate}rps at $target_url"
 
@@ -195,12 +231,15 @@ for test_plan in "${test_plans_to_run[@]}"; do
 
     current_time=$(date +%s)
     generate_requests $load_clients $load_rate $load_total $target_url $target_authorization
-    
 
-    echo "Reading analytics data"
+    echo "Reading analytics"
     analytics_data=$(get_analytics_data $current_time $load_total)
+    if [ $? -ne 0 ]; then
+      echo "ERROR Problem getting analytics data: $analytics_data"
+      exit 1
+    fi
 
-    echo "Parsing analytics data"
+    echo "Parsing analytics"
     parsed_data_file_path="output/rl-parsed-data-$test_plan_file_name.csv"
     jq -r '.data[] | [.ResponseCode, .TimeStamp] | join(" ")' <<< "$analytics_data" > $parsed_data_file_path
 
