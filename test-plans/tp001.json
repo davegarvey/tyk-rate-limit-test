@@ -1,0 +1,16 @@
+{
+    "import": {
+        "api": "data/apis/bearer-token-api.json",
+        "key": "data/keys/bearer-token-api-30-per-1.json"
+    },
+    "target": {
+        "url": "http://localhost:8080/bearer-token-api/get",
+        "authorization": "bearer-token-api-30-per-1",
+        "apiId": "1d8681baf6ce46e36e012abc06031ac7",
+        "load": {
+            "clients": 1,
+            "rate": 5,
+            "total": 20  
+        }
+    }
+}
