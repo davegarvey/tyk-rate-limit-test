@@ -1,56 +1,19 @@
 {
-    "meta_data": "{}",
+    "allowance": 1000,
     "rate": 1000,
     "per": 60,
-    "throttle_interval": -1,
-    "throttle_retry_limit": -1,
-    "quota_max": -1,
-    "quota_remaining": 0,
-    "quota_renewal_rate": -1,
-    "quota_renews": 1717154512,
-    "max_query_depth": -1,
-    "access_rights_array": [
-        {
-            "api": {
-                "available_auth_types": [
-                    "authToken"
-                ],
-                "graphql": {
-                    "enabled": false,
-                    "schema": null
-                },
-                "auth": {
-                    "use_certificate": false
-                },
-                "versions": [
-                    {
-                        "name": "Default",
-                        "endpoints": []
-                    }
-                ]
-            },
-            "api_id": "1d8681baf6ce46e36e012abc06031ac7",
-            "api_name": "Bearer Token Auth",
-            "allowed_urls": [],
-            "field_access_rights": [],
-            "disable_introspection": false,
-            "restricted_types": [],
-            "allowed_types": [],
-            "versions": [
-                "Default"
-            ],
-            "limit": {
-                "rate": 30,
-                "per": 1,
-                "throttle_interval": -1,
-                "throttle_retry_limit": -1,
-                "quota_max": -1,
-                "quota_remaining": 0,
-                "quota_renewal_rate": -1,
-                "quota_renews": 0,
-                "max_query_depth": -1
-            },
-            "allowance_scope": "1d8681baf6ce46e36e012abc06031ac7"
-        }
-    ]
-}
+    "access_rights": {
+      "1d8681baf6ce46e36e012abc06031ac7": {
+        "api_name": "Bearer Token Auth",
+        "api_id": "1d8681baf6ce46e36e012abc06031ac7",
+        "versions": ["Default"],
+        "limit": {
+          "rate": 30,
+          "per": 1
+        },
+        "allowance_scope": "1d8681baf6ce46e36e012abc06031ac7"
+      }
+    },
+    "org_id": "5e9d9544a1dcd60001d0ed20"
+  }
+  
