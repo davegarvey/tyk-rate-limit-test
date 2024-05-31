@@ -85,7 +85,7 @@ END {
             # Get the current timestamp
             current_timestamp = get_field(lines[i], 2)
 
-            # Get the value of the line at the extent of the rate limit
+            # Get the index of the line at the extent of the rate limit
             next_line_index = i + rate_limit
 
             if (next_line_index < line_count) {
@@ -98,28 +98,28 @@ END {
                 difference_ms = current_epoch_ms - next_epoch_ms
 
                 if (difference_ms > rate_limit_window_ms) {
-                    # the requests are outside of the RL window, so should not be rate limited
+                    # the requests are outside of the RRL window
                     if (status_code == 200) {
-                        result = "pass"
-                        reason = "200-out-RL"
+                        result = "RRL-pass"
+                        reason = "200-out-RRL"
                         rl_pass_count++
                         rl200_pass_count++
                     } else {
-                        result = "fail"
-                        reason = "429-out-RL"
+                        result = "RRL-fail"
+                        reason = "429-out-RRL"
                         rl_fail_count++
                         rl429_fail_count++
                     }
                 } else {
-                    # the requests are inside of the RL window, so should be rate limited
+                    # the requests are inside of the RRL window
                     if (status_code == 200) {
-                        result = "fail"
-                        reason = "200-in-RL"
+                        result = "RRL-fail"
+                        reason = "200-in-RRL"
                         rl_fail_count++
                         rl200_fail_count++
                     } else {
-                        result = "pass"
-                        reason = "429-in-RL"
+                        result = "RRL-pass"
+                        reason = "429-in-RRL"
                         rl_pass_count++
                         rl429_pass_count++
                     }
@@ -128,12 +128,12 @@ END {
                 # requests that occur within the initial rate limit request range should not be rate limited
                 # i.e. if the rate limit is 5 per second, the first 5 requests should not be rate limited regardless of when they occur    
                 if (status_code == 200) {
-                    result = "pass"
+                    result = "RRL-pass"
                     reason = "200-in-init"
                     rl_pass_count++
                     rl200_pass_count++
                 } else {
-                    result = "fail"
+                    result = "RRL-fail"
                     reason = "429-in-init"
                     rl_fail_count++
                     rl429_fail_count++
@@ -160,8 +160,6 @@ END {
         rate_200 = 0
     }
 
-
     rl_success_percent = status_429_count == 0 ? 100 : (rl_pass_count / line_count) * 100
-    overall_result = rl_success_percent == 100 ? "pass" : "fail"
-    print test_plan_file_name, line_count, status_200_count, status_429_count, status_other_count, rl_pass_count, rl_fail_count, rl_success_percent, rate_200, overall_result >> summary_data_path
+    print test_plan_file_name, line_count, status_200_count, status_429_count, status_other_count, rl_pass_count, rl_fail_count, rl_success_percent, rate_200 >> summary_data_path
 }
