@@ -40,7 +40,26 @@ generate_requests() {
     local requests_total="$3"
     local target_url="$4"
     local api_key="$5"
-    hey -c "$clients" -q "$requests_per_second" -n "$requests_total" -H "Authorization: $api_key" "$target_url" 1> /dev/null
+    echo -e "\nclients: $clients\nrequests_per_second: $requests_per_second\nrequests_total: $requests_total\napi_key: $api_key\ntarget_url: $target_url\n"
+    hey -c "$clients" -q "$requests_per_second" -n "$requests_total" -H "Authorization: $api_key" "$target_url" #1> /dev/null
+}
+
+create_api() {
+  api_data_path="$1"
+  response=$(curl -s -H "Authorization:$DASHBOARD_API_TOKEN" $DASHBOARD_BASE_URL/api/apis -d @$api_data_path)
+  status=$(echo "$response" | jq -r '.Status')
+  if [ "$status" != "OK" ]; then
+    echo "ERROR: API import failed"
+    echo "$response"
+    exit 1
+  else
+    imported_api_id=$(echo "$response" | jq -r '.Meta')
+    api_listen_path=$(jq -r '.api_definition.proxy.listen_path' "$api_data_path")
+    while [ "$(curl -o /dev/null -s -w "%{http_code}" -H "x-tyk-authorization: $GATEWAY_API_TOKEN" $GATEWAY_BASE_URL$api_listen_path)" == "404" ]; do
+      # wait for API to become available on the gateway
+      sleep 1
+    done 
+  fi 
 }
 
 get_analytics_data() {
@@ -78,7 +97,18 @@ for test_plan in "${test_plans_to_run[@]}"; do
         continue
     fi
 
+    echo -e "\nRunning test plan \"$test_plan_file_name\""
     test_plan_run=true
+    
+    imported_api_id=""
+    imported_key=""
+    if jq -e 'has("import")' "$test_plan_path" >/dev/null 2>&1; then
+      if jq -e '.import | has("api")' "$test_plan_path" >/dev/null 2>&1; then
+        api_data_path=$(jq -r '.import.api' "$test_plan_path")
+        echo "Importing API \"$(jq -r '.api_definition.name' "$api_data_path")\""
+        create_api $api_data_path
+      fi
+    fi
 
     # test_data_source=$(jq -r '.dataSource' $test_plan_path)
     key_file_path=$(jq -r '.import.key' $test_plan_path)
@@ -89,8 +119,6 @@ for test_plan in "${test_plans_to_run[@]}"; do
     key_rate=$(jq 'first(.access_rights[] | .limit.rate)' $key_file_path)
     key_rate_period=$(jq 'first(.access_rights[] | .limit.per)' $key_file_path)
     analytics_data=""
-
-    echo -e "\nRunning test plan \"$test_plan_file_name\""
 
     target_authorization=$(jq -r '.target.authorization' $test_plan_path)
     target_url=$(jq -r '.target.url' $test_plan_path)
@@ -107,7 +135,13 @@ for test_plan in "${test_plans_to_run[@]}"; do
     current_time=$(date +%s)
     generate_requests $load_clients $load_rate $load_total $target_url $target_authorization
     
+
+
     analytics_data=$(get_analytics_data $current_time $load_total)
+
+    if [ "$imported_api_id" != "" ]; then
+      curl -s -H "Authorization:$DASHBOARD_API_TOKEN" --request DELETE $DASHBOARD_BASE_URL/api/apis/$imported_api_id
+    fi
 
     echo "Parsing data"
     parsed_data_file_path="output/rl-parsed-data-$test_plan_file_name.csv"
