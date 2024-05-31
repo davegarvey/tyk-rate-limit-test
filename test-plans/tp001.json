@@ -6,7 +6,6 @@
     "target": {
         "url": "http://localhost:8080/bearer-token-auth/get",
         "authorization": "eyJvcmciOiI1ZTlkOTU0NGExZGNkNjAwMDFkMGVkMjAiLCJpZCI6ImJlYXJlci10b2tlbi1hcGktMzAtcGVyLTEiLCJoIjoibXVybXVyNjQifQ==",
-        "apiId": "1d8681baf6ce46e36e012abc06031ac7",
         "load": {
             "clients": 1,
             "rate": 50,

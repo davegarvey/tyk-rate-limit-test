@@ -49,10 +49,9 @@ get_key_test_data() {
 }
 
 get_analytics_data() {
-    local api_id="$1"
-    local from_epoch="$2"
-    local request_count="$3"
-    local analytics_url="$DASHBOARD_BASE_URL/api/logs/?start=$from_epoch&p=-1&api=$api_id"
+    local from_epoch="$1"
+    local request_count="$2"
+    local analytics_url="$DASHBOARD_BASE_URL/api/logs/?start=$from_epoch&p=-1"
     local data=""
     local analytics_count=0
 
@@ -100,7 +99,6 @@ for test_plan in "${test_plans_to_run[@]}"; do
 
     target_authorization=$(jq -r '.target.authorization' $test_plan_path)
     target_url=$(jq -r '.target.url' $test_plan_path)
-    target_api_id=$(jq -r '.target.apiId' $test_plan_path)
     target_authorization=$(jq -r '.target.authorization' $test_plan_path)
     load_clients=$(jq '.target.load.clients' $test_plan_path)
     load_rate=$(jq '.target.load.rate' $test_plan_path)
@@ -114,7 +112,7 @@ for test_plan in "${test_plans_to_run[@]}"; do
     current_time=$(date +%s)
     generate_requests $load_clients $load_rate $load_total $target_url $target_authorization
     
-    analytics_data=$(get_analytics_data $target_api_id $current_time $load_total)
+    analytics_data=$(get_analytics_data $current_time $load_total)
 
     echo "Parsing data"
     parsed_data_file_path="output/rl-parsed-data-$test_plan_file_name.csv"
