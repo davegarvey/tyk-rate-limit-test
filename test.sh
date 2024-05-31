@@ -43,11 +43,6 @@ generate_requests() {
     hey -c "$clients" -q "$requests_per_second" -n "$requests_total" -H "Authorization: $api_key" "$target_url" 1> /dev/null
 }
 
-get_key_test_data() {
-    local key_path="$1"
-    echo "$(jq '.access_rights[] | { rate: .limit.rate, per: .limit.per }' $keypath)"
-}
-
 get_analytics_data() {
     local from_epoch="$1"
     local request_count="$2"
