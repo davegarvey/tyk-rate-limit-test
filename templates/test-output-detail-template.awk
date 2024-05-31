@@ -8,14 +8,14 @@ BEGIN {
     res_code_width = 8
     ms_diff_width = 8
     ms_limit_width = 8
-    result_width = 6
+    result_width = 10
     reason_width = 10
     
     # Header
     printf "%-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s\n",
         plan_width, "Plan", req_idx_width, "Req Idx", comp_idx_width, "Comp Idx",
         req_ts_width, "Req TS", comp_ts_width, "Comp TS", res_code_width, "Res Code", ms_diff_width, "Ms Diff",
-        ms_limit_width, "Ms Limit",  result_width, "Result", reason_width, "Reason"
+        ms_limit_width, "Ms Limit",  result_width, "RRL Result", reason_width, "Reason"
 }
 
 {
@@ -24,7 +24,7 @@ BEGIN {
         printf "%-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s\n",
             plan_width, "--------", req_idx_width, "-------", comp_idx_width, "--------",
             req_ts_width, "------------------------", comp_ts_width, "------------------------", res_code_width, "--------",
-            ms_diff_width, "-------", ms_limit_width, "-------", result_width, "------", reason_width, "----------"
+            ms_diff_width, "-------", ms_limit_width, "-------", result_width, "----------", reason_width, "----------"
     }
     printf "%-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s\n",
         plan_width, $1, req_idx_width, $2, comp_idx_width, $3,
