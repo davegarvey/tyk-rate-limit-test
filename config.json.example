@@ -1,0 +1,12 @@
+{
+    "tyk": {
+        "dashboard": {
+            "host": "http://my-dashboard-host:3000",
+            "token": "my-dashboard-api-key"
+        },
+        "gateway": {
+            "host": "http://my-gateway-host:8080",
+            "token": "my-gateway-api-key"
+        }
+    }
+}
