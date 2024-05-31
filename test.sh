@@ -4,8 +4,8 @@ readonly DASHBOARD_BASE_URL="$(jq -r '.tyk.dashboard.host' config.json)"
 readonly DASHBOARD_API_TOKEN="$(jq -r '.tyk.dashboard.token' config.json)"
 readonly GATEWAY_BASE_URL="$(jq -r '.tyk.gateway.host' config.json)"
 readonly GATEWAY_API_TOKEN="$(jq -r '.tyk.gateway.token' config.json)"
-readonly TEST_SUMMARY_PATH="output/rl-test-output-summary"
-readonly TEST_DETAIL_PATH="output/rl-test-output-detail"
+readonly TEST_SUMMARY_PATH="output/rl-test-output-summary.csv"
+readonly TEST_DETAIL_PATH="output/rl-test-output-detail.csv"
 export_analytics=false
 show_detail=false
 
