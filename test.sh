@@ -49,17 +49,69 @@ create_api() {
   response=$(curl -s -H "Authorization:$DASHBOARD_API_TOKEN" $DASHBOARD_BASE_URL/api/apis -d @$api_data_path)
   status=$(echo "$response" | jq -r '.Status')
   if [ "$status" != "OK" ]; then
-    echo "ERROR: API import failed"
+    echo "\nERROR: API creation failed"
     echo "$response"
     exit 1
   else
     imported_api_id=$(echo "$response" | jq -r '.Meta')
     api_listen_path=$(jq -r '.api_definition.proxy.listen_path' "$api_data_path")
+    # wait for API to become available on the gateway before returning
     while [ "$(curl -o /dev/null -s -w "%{http_code}" -H "x-tyk-authorization: $GATEWAY_API_TOKEN" $GATEWAY_BASE_URL$api_listen_path)" == "404" ]; do
-      # wait for API to become available on the gateway
       sleep 1
     done 
   fi 
+}
+
+delete_api() {
+  api_id="$1"
+  response=$(curl -s -H "Authorization:$DASHBOARD_API_TOKEN" --request DELETE $DASHBOARD_BASE_URL/api/apis/$api_id)
+  status=$(echo "$response" | jq -r '.Status')
+
+  if [ "$status" != "OK" ]; then
+    echo -e "\nERROR: key deletion failed"
+    echo "$response"
+    exit 1
+  fi 
+}
+
+create_key() {
+  key_data_path="$1"
+  response=$(curl -s -H "x-tyk-authorization:$GATEWAY_API_TOKEN" $GATEWAY_BASE_URL/tyk/keys -d @$key_data_path)
+  status=$(echo "$response" | jq -r '.status')
+
+  if [ "$status" != "ok" ]; then
+    echo -e "\nERROR: key creation failed"
+    echo "$response"
+    exit 1
+  else
+    # return key
+    echo $(echo "$response" | jq -r '.key')
+  fi 
+}
+
+delete_key() {
+  key="$1"
+  response=$(curl -s -H "x-tyk-authorization:$GATEWAY_API_TOKEN" --request DELETE $GATEWAY_BASE_URL/tyk/keys/$key)
+  status=$(echo "$response" | jq -r '.status')
+
+  if [ "$status" != "ok" ]; then
+    echo -e "\nERROR: key deletion failed"
+    echo "$response"
+    exit 1
+  fi 
+}
+
+read_key() {
+  key="$1"
+  response=$(curl -s -H "x-tyk-authorization:$GATEWAY_API_TOKEN" $GATEWAY_BASE_URL/tyk/keys/$key)
+  echo "res: $response"
+  # status=$(echo "$response" | jq -r '.status')
+
+  # if [ "$status" != "ok" ]; then
+  #   echo -e "\nERROR: key deletion failed"
+  #   echo "$response"
+  #   exit 1
+  # fi 
 }
 
 get_analytics_data() {
@@ -99,14 +151,29 @@ for test_plan in "${test_plans_to_run[@]}"; do
 
     echo -e "\nRunning test plan \"$test_plan_file_name\""
     test_plan_run=true
+    target_url=$(jq -r '.target.url' $test_plan_path)
+    target_authorization=$(jq -r '.target.authorization' $test_plan_path)
+    load_clients=$(jq '.target.load.clients' $test_plan_path)
+    load_rate=$(jq '.target.load.rate' $test_plan_path)
+    load_total=$(jq '.target.load.total' $test_plan_path)
+
     
     imported_api_id=""
     imported_key=""
     if jq -e 'has("import")' "$test_plan_path" >/dev/null 2>&1; then
       if jq -e '.import | has("api")' "$test_plan_path" >/dev/null 2>&1; then
         api_data_path=$(jq -r '.import.api' "$test_plan_path")
-        echo "Importing API \"$(jq -r '.api_definition.name' "$api_data_path")\""
+        echo "Creating API \"$(jq -r '.api_definition.name' "$api_data_path")\""
         create_api $api_data_path
+      fi
+      if jq -e '.import | has("key")' "$test_plan_path" >/dev/null 2>&1; then
+        key_data_path=$(jq -r '.import.key' "$test_plan_path")
+        echo -n "Creating Key"
+        imported_key=$(create_key $key_data_path)
+        echo " $imported_key"
+        if [ "$target_authorization" != "" ]; then
+          echo "WARNING: Created key overrides key defined in test plan. Set test plan 'authorization' value to an empty string to prevet this warning."
+        fi
       fi
     fi
 
@@ -120,12 +187,6 @@ for test_plan in "${test_plans_to_run[@]}"; do
     key_rate_period=$(jq 'first(.access_rights[] | .limit.per)' $key_file_path)
     analytics_data=""
 
-    target_authorization=$(jq -r '.target.authorization' $test_plan_path)
-    target_url=$(jq -r '.target.url' $test_plan_path)
-    target_authorization=$(jq -r '.target.authorization' $test_plan_path)
-    load_clients=$(jq '.target.load.clients' $test_plan_path)
-    load_rate=$(jq '.target.load.rate' $test_plan_path)
-    load_total=$(jq '.target.load.total' $test_plan_path)
 
     echo "Generating $load_total requests @ ${load_rate}rps at $target_url"
 
@@ -136,14 +197,10 @@ for test_plan in "${test_plans_to_run[@]}"; do
     generate_requests $load_clients $load_rate $load_total $target_url $target_authorization
     
 
-
+    echo "Reading analytics data"
     analytics_data=$(get_analytics_data $current_time $load_total)
 
-    if [ "$imported_api_id" != "" ]; then
-      curl -s -H "Authorization:$DASHBOARD_API_TOKEN" --request DELETE $DASHBOARD_BASE_URL/api/apis/$imported_api_id
-    fi
-
-    echo "Parsing data"
+    echo "Parsing analytics data"
     parsed_data_file_path="output/rl-parsed-data-$test_plan_file_name.csv"
     jq -r '.data[] | [.ResponseCode, .TimeStamp] | join(" ")' <<< "$analytics_data" > $parsed_data_file_path
 
@@ -157,6 +214,16 @@ for test_plan in "${test_plans_to_run[@]}"; do
     if [ "$export_analytics" == "true" ]; then
         echo "Exporting analytics data"
         echo "$analytics_data" > .context-data/rl-test-analytics-export-$test_plan_file_name.json
+    fi
+
+    # data cleanup
+    if [ "$imported_api_id" != "" ]; then
+      echo "Deleting API"
+      delete_api $imported_api_id
+    fi
+    if [ "$imported_key" != "" ]; then
+      echo "Deleting key"
+      delete_key $imported_key
     fi
 done
 
