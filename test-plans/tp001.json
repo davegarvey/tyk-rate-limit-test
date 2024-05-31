@@ -4,13 +4,13 @@
         "key": "data/keys/bearer-token-api-30-per-1.json"
     },
     "target": {
-        "url": "http://localhost:8080/bearer-token-api/get",
-        "authorization": "bearer-token-api-30-per-1",
-        "apiId": "1d8681baf6ce46e36e012abc06031ac7",
+        "url": "http://localhost:8080/bearer-token-auth/get",
+        "authorization": "eyJvcmciOiI1ZTlkOTU0NGExZGNkNjAwMDFkMGVkMjAiLCJpZCI6ImJlYXJlci10b2tlbi1hcGktMzAtcGVyLTEiLCJoIjoibXVybXVyNjQifQ==",
+        "api_id": "1d8681baf6ce46e36e012abc06031ac7",
         "load": {
             "clients": 1,
-            "rate": 5,
-            "total": 20  
+            "rate": 50,
+            "total": 200
         }
     }
 }
