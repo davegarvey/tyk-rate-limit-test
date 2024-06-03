@@ -1,2 +1,10 @@
 output/*.csv
 config.json
+
+# ignore apis and keys by default - to avoid custom data files being added to the repo by mistake (see next section for exceptions)
+data/apis/*.json
+data/keys/*.json
+
+# api and key exceptions - use this section to allow git to track these files
+!data/apis/bearer-token-api.json
+!data/keys/bearer-token-api-30-per-1.json
