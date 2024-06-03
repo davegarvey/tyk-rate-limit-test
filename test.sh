@@ -202,8 +202,7 @@ get_analytics_data() {
 }
 
 # clear the test output files
-> $TEST_SUMMARY_PATH
-> $TEST_DETAIL_PATH
+rm output/*.csv 2>/dev/null
 test_plan_run=false
 
 for test_plan in "${test_plans_to_run[@]}"; do
