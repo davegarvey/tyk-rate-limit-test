@@ -81,7 +81,7 @@ create_api() {
     api_id=$(echo "$response" | jq -r '.Meta')
     api_listen_path=$(jq -r '.api_definition.proxy.listen_path' "$api_data_path")
     # wait for API to become available on the gateway before returning
-    while [ "$(curl -o /dev/null -s -w "%{http_code}" -H "x-tyk-authorization: $GATEWAY_API_TOKEN" $GATEWAY_BASE_URL$api_listen_path)" == "404" ]; do
+    while [ "$(curl -o /dev/null -s -w "%{http_code}" $GATEWAY_BASE_URL$api_listen_path)" == "404" ]; do
       sleep 1
     done
     echo "$api_id"
@@ -90,12 +90,31 @@ create_api() {
 
 delete_api() {
   api_id="$1"
+  api_data=$(read_api "$api_id")
   response=$(curl -s -H "Authorization:$DASHBOARD_API_TOKEN" --request DELETE $DASHBOARD_BASE_URL/api/apis/$api_id)
   status=$(echo "$response" | jq -r '.Status')
 
   if [ "$status" != "OK" ]; then
     echo -e "\nERROR: API deletion failed ($api_id)\n"
     echo "$response"
+    exit 1
+  else
+    api_listen_path=$(echo "$api_data" | jq -r '.api_definition.proxy.listen_path')
+    # wait for API to become unavailable on the gateway before returning
+    while [ "$(curl -o /dev/null -s -w "%{http_code}" $GATEWAY_BASE_URL$api_listen_path)" != "404" ]; do
+      sleep 1
+    done
+  fi 
+}
+
+read_api() {
+  api_id="$1"
+  response=$(curl -s -w "%{http_code}" -H "Authorization:$DASHBOARD_API_TOKEN" -o - $DASHBOARD_BASE_URL/api/apis/$api_id)
+  status_code=${response: -3}
+  body=${response:0:$((${#response}-3))}
+
+  echo "$body"
+  if [ "$status_code" != "200" ]; then
     exit 1
   fi 
 }
@@ -131,12 +150,10 @@ read_key() {
   response=$(curl -s -w "%{http_code}" -H "x-tyk-authorization:$GATEWAY_API_TOKEN" -o - $GATEWAY_BASE_URL/tyk/keys/$key)
   status_code=${response: -3}
   body=${response:0:$((${#response}-3))}
-
+  
+  echo "$body"
   if [ "$status_code" != "200" ]; then
-    echo "$body"
     exit 1
-  else
-    echo "$body"
   fi
 }
 
@@ -176,7 +193,7 @@ get_analytics_data() {
             echo "Request count: $request_count"
             exit 1
           fi
-          # pause, to allow time for analytics data to be processed
+          # pause, to allow more time for analytics data to be processed
           sleep 1
       fi
   done
@@ -225,7 +242,7 @@ for test_plan in "${test_plans_to_run[@]}"; do
       echo -n "Creating Key"
       create_key_result=$(create_key $key_data_path)
       if [ $? -ne 0 ]; then
-        echo -e "ERROR: key creation failed\n$create_key_result"
+        echo -e "\nERROR: key creation failed\n$create_key_result"
         exit 1
       fi
       imported_key="$create_key_result"
@@ -264,7 +281,7 @@ for test_plan in "${test_plans_to_run[@]}"; do
   echo "Reading analytics"
   analytics_data=$(get_analytics_data $current_time $load_total)
   if [ $? -ne 0 ]; then
-    echo "ERROR Problem getting analytics data: $analytics_data"
+    echo -e "\nERROR Problem getting analytics data:\n$analytics_data"
     exit 1
   fi
 
