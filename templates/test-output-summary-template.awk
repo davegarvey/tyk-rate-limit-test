@@ -10,16 +10,16 @@ BEGIN {
     rl_fail_width = 8
     rl_success_percent_width = 10
     rate_200_width = 8
-    rate_200_percent_width = 10
+    rate_200_percent_width = 14
     key_rate_width = 8
-    key_rate_percent_width = 10
+    key_rate_percent_width = 14
     
     # Header
     printf "%-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s\n",
         plan_width, "Plan", req_eate_width, "Req Rate", req_total_width, "Req Total", res_200_width, "Res 200",
         res_429_width, "Res 429", res_other_width, "Res Other", rl_pass_width, "RRL Pass",
         rl_fail_width, "RRL Fail", rl_success_percent_width, "RRL Pass %", rate_200_width, "200 Rate",
-        rate_200_percent_width, "200 Rate %", key_rate_width, "Key Rate", key_rate_percent_width, "Key Rate %"
+        rate_200_percent_width, "200/Req Rate %", key_rate_width, "Key Rate", key_rate_percent_width, "200/Key Rate %"
 }
 
 {
