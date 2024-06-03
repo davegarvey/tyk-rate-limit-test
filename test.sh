@@ -247,6 +247,7 @@ for test_plan in "${test_plans_to_run[@]}"; do
     awk -v test_plan_file_name="$test_plan_file_name" \
         -v rate_limit="$key_rate" \
         -v rate_limit_period="$key_rate_period" \
+        -v req_rate="$load_rate" \
         -v summary_data_path="$TEST_SUMMARY_PATH" \
         -f templates/rl-analysis-template.awk $parsed_data_file_path >> $TEST_DETAIL_PATH
 

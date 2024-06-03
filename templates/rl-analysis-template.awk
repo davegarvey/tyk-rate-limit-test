@@ -147,7 +147,7 @@ END {
         }
     }   
 
-    normalised_key_rate_limit = rate_limit / rate_limit_window_ms * 1000 # normalise key rate limit to per second
+    normalised_key_rate_limit = (rate_limit / rate_limit_window_ms) * 1000 # normalise key rate limit to per second
 
     if (status_200_count != 0) {
         # calculate rate of 200 responses
@@ -161,6 +161,9 @@ END {
         rate_200 = 0
     }
 
+    key_rate_percent = int((rate_200 / normalised_key_rate_limit) * 100)
+    rate_200_percent = int((rate_200 / req_rate) * 100)
+
     rl_success_percent = status_429_count == 0 ? 100 : (rl_pass_count / line_count) * 100
-    print test_plan_file_name, line_count, status_200_count, status_429_count, status_other_count, rl_pass_count, rl_fail_count, rl_success_percent, rate_200, normalised_key_rate_limit >> summary_data_path
+    print test_plan_file_name, req_rate, line_count, status_200_count, status_429_count, status_other_count, rl_pass_count, rl_fail_count, rl_success_percent, rate_200, rate_200_percent, normalised_key_rate_limit, key_rate_percent >> summary_data_path
 }
