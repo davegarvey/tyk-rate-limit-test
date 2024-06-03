@@ -5,7 +5,7 @@
     },
     "target": {
         "url": "http://localhost:8080/bearer-token-auth/get",
-        "authorization": "eyJvcmciOiI1ZTlkOTU0NGExZGNkNjAwMDFkMGVkMjAiLCJpZCI6ImJlYXJlci10b2tlbi1hcGktMzAtcGVyLTEiLCJoIjoibXVybXVyNjQifQ==",
+        "authorization": "",
         "load": {
             "clients": 1,
             "rate": 50,
