@@ -1,0 +1,15 @@
+{
+    "import": {
+        "api": "data/apis/bearer-token-api.json",
+        "key": "data/keys/bearer-token-api-30-per-1.json"
+    },
+    "target": {
+        "url": "http://localhost:8080/bearer-token-auth/get",
+        "authorization": "",
+        "load": {
+            "clients": 1,
+            "rate": 20,
+            "total": 200
+        }
+    }
+}

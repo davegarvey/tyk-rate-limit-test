@@ -10,3 +10,5 @@ test-plans/*.json
 !data/apis/bearer-token-api.json
 !data/keys/bearer-token-api-30-per-1.json
 !test-plans/tp001.json
+!test-plans/tp002.json
+!test-plans/tp003.json
