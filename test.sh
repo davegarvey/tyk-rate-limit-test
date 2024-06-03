@@ -61,8 +61,13 @@ generate_requests() {
     local requests_total="$3"
     local target_url="$4"
     local api_key="$5"
-    # echo -e "\nclients: $clients\nrequests_per_second: $requests_per_second\nrequests_total: $requests_total\napi_key: $api_key\ntarget_url: $target_url\n"
-    hey -c "$clients" -q "$requests_per_second" -n "$requests_total" -H "Authorization: $api_key" "$target_url" 1> /dev/null
+    hey_output=$(hey -c "$clients" -q "$requests_per_second" -n "$requests_total" -H "Authorization: $api_key" "$target_url")
+    if [ $? != 0 ]; then
+      echo "ERROR: Request generation failed"
+      echo -e "\nclients: $clients\nrequests_per_second: $requests_per_second\nrequests_total: $requests_total\napi_key: $api_key\ntarget_url: $target_url\n"
+      echo "$hey_output"
+      exit 1
+    fi
 }
 
 create_api() {
@@ -165,6 +170,7 @@ get_analytics_data() {
         if [ "$analytics_count" -ne "$request_count" ]; then
             ((retry_count++))
             if [ "$max_retries" -eq "$retry_count" ]; then
+              echo "Analytics URL: $analytics_url"
               echo "Max retry count reached ($max_retries)"
               echo "Analytics record count: $analytics_count"
               echo "Request count: $request_count"
