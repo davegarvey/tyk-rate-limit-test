@@ -34,6 +34,27 @@ if [ ${#test_plans_to_run[@]} -eq 0 ]; then
   exit 0
 fi
 
+cleanup() {
+    local exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        echo "Performing cleanup due to error (exit code: $exit_code)..."
+        remove_created_data
+    fi
+}
+
+trap cleanup EXIT
+
+remove_created_data() {
+    if [ "$imported_api_id" != "" ]; then
+      echo "Deleting API $imported_api_id"
+      delete_api $imported_api_id
+    fi
+    if [ "$imported_key" != "" ]; then
+      echo "Deleting key $imported_key"
+      delete_key $imported_key
+    fi
+}
+
 generate_requests() {
     local clients="$1"
     local requests_per_second="$2"
@@ -68,7 +89,7 @@ delete_api() {
   status=$(echo "$response" | jq -r '.Status')
 
   if [ "$status" != "OK" ]; then
-    echo -e "\nERROR: API deletion failed ($api_id)"
+    echo -e "\nERROR: API deletion failed ($api_id)\n"
     echo "$response"
     exit 1
   fi 
@@ -186,19 +207,23 @@ for test_plan in "${test_plans_to_run[@]}"; do
       if jq -e '.import | has("api")' "$test_plan_path" >/dev/null 2>&1; then
         api_data_path=$(jq -r '.import.api' "$test_plan_path")
         echo "Creating API \"$(jq -r '.api_definition.name' "$api_data_path")\""
-        imported_api_id=$(create_api $api_data_path)
+        create_api_result=$(create_api $api_data_path)
         if [ $? -ne 0 ]; then
-            echo -e "ERROR: API creation failed\n$imported_api_id"
+            echo -e "ERROR: API creation failed\n$create_api_result"
             exit 1
+        else
+          imported_api_id="$create_api_result"
         fi
       fi
       if jq -e '.import | has("key")' "$test_plan_path" >/dev/null 2>&1; then
         key_data_path=$(jq -r '.import.key' "$test_plan_path")
         echo -n "Creating Key"
-        imported_key=$(create_key $key_data_path)
+        create_key_result=$(create_key $key_data_path)
         if [ $? -ne 0 ]; then
-          echo -e "ERROR: key creation failed\n$imported_key"
+          echo -e "ERROR: key creation failed\n$create_key_result"
           exit 1
+        else
+          imported_key="$create_key_result"
         fi
         echo " $imported_key"
         if [ "$target_authorization" != "" ]; then
@@ -257,14 +282,7 @@ for test_plan in "${test_plans_to_run[@]}"; do
     fi
 
     # data cleanup
-    if [ "$imported_api_id" != "" ]; then
-      echo "Deleting API"
-      delete_api $imported_api_id
-    fi
-    if [ "$imported_key" != "" ]; then
-      echo "Deleting key"
-      delete_key $imported_key
-    fi
+    remove_created_data
 done
 
 if [ "$test_plan_run" = "true" ]; then
