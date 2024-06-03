@@ -211,9 +211,8 @@ for test_plan in "${test_plans_to_run[@]}"; do
         if [ $? -ne 0 ]; then
             echo -e "ERROR: API creation failed\n$create_api_result"
             exit 1
-        else
-          imported_api_id="$create_api_result"
         fi
+        imported_api_id="$create_api_result"
       fi
       if jq -e '.import | has("key")' "$test_plan_path" >/dev/null 2>&1; then
         key_data_path=$(jq -r '.import.key' "$test_plan_path")
@@ -222,9 +221,8 @@ for test_plan in "${test_plans_to_run[@]}"; do
         if [ $? -ne 0 ]; then
           echo -e "ERROR: key creation failed\n$create_key_result"
           exit 1
-        else
-          imported_key="$create_key_result"
         fi
+        imported_key="$create_key_result"
         echo " $imported_key"
         if [ "$target_authorization" != "" ]; then
           echo "WARNING: Created key overrides key defined in test plan. To prevent this warning, set test plan 'authorization' value to an empty string."
