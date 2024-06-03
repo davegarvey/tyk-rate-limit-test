@@ -202,7 +202,7 @@ for test_plan in "${test_plans_to_run[@]}"; do
         fi
         echo " $imported_key"
         if [ "$target_authorization" != "" ]; then
-          echo "WARNING: Created key overrides key defined in test plan. Set test plan 'authorization' value to an empty string to prevent this warning."
+          echo "WARNING: Created key overrides key defined in test plan. To prevent this warning, set test plan 'authorization' value to an empty string."
         fi
         target_authorization="$imported_key"
       fi
