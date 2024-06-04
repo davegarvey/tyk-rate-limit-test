@@ -1,4 +1,5 @@
 output/*.csv
+output/*.json
 config.json
 
 # ignore apis, keys and plans by default - to avoid custom data files being added to the repo by mistake (see next section for exceptions)
