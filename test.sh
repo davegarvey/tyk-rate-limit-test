@@ -9,7 +9,7 @@ readonly TEST_DETAIL_PATH="output/rl-test-output-detail.csv"
 export_analytics=false
 show_detail=false
 
-while getopts "de" opt; do
+while getopts "dei:" opt; do
   case ${opt} in
     d ) 
         show_detail=true
@@ -30,8 +30,8 @@ shift $((OPTIND -1))
 test_plans_to_run=("$@")
 
 if [ ${#test_plans_to_run[@]} -eq 0 ]; then
-  echo "No tests to run. Provide test plan names as arguments. e.g. ./test.sh tp001"
-  exit 0
+  echo "No tests to run. Please provide test plan names e.g. ./test.sh tp001"
+  exit 1
 fi
 
 cleanup() {
@@ -216,78 +216,89 @@ for test_plan in "${test_plans_to_run[@]}"; do
 
   echo -e "\nRunning test plan \"$test_plan_file_name\""
   test_plan_run=true
-  target_url=$(jq -r '.target.url' $test_plan_path)
-  target_authorization=$(jq -r '.target.authorization' $test_plan_path)
-  load_clients=$(jq '.target.load.clients' $test_plan_path)
-  load_rate=$(jq '.target.load.rate' $test_plan_path)
-  load_total=$(jq '.target.load.total' $test_plan_path)
 
-  # import data, if defined
-  imported_api_id=""
-  imported_key=""
-  if jq -e 'has("import")' "$test_plan_path" >/dev/null 2>&1; then
-    if jq -e '.import | has("api")' "$test_plan_path" >/dev/null 2>&1; then
-      api_data_path=$(jq -r '.import.api' "$test_plan_path")
-      echo "Creating API \"$(jq -r '.api_definition.name' "$api_data_path")\""
-      create_api_result=$(create_api $api_data_path)
-      if [ $? -ne 0 ]; then
-          echo -e "ERROR: API creation failed\n$create_api_result"
+  # if test plan provides analytics data, then just read the test parameters and skip to analysis
+  if jq -e '.import | has("analytics")' "$test_plan_path" >/dev/null 2>&1; then
+    parsed_data_file_path=$(jq -r '.import.analytics' "$test_plan_path")
+    key_rate=$(jq -r '.test.keyRateLimit' $test_plan_path)
+    key_rate_period=$(jq -r '.test.keyRateLimitPeriod' $test_plan_path)
+    load_rate=$(jq -r '.test.loadRequestRate' $test_plan_path)
+    imported_api_id=""
+    imported_key=""
+  else
+    target_url=$(jq -r '.target.url' $test_plan_path)
+    target_authorization=$(jq -r '.target.authorization' $test_plan_path)
+    load_clients=$(jq '.target.load.clients' $test_plan_path)
+    load_rate=$(jq '.target.load.rate' $test_plan_path)
+    load_total=$(jq '.target.load.total' $test_plan_path)
+
+    # import data, if defined
+    imported_api_id=""
+    imported_key=""
+    if jq -e 'has("import")' "$test_plan_path" >/dev/null 2>&1; then
+      if jq -e '.import | has("api")' "$test_plan_path" >/dev/null 2>&1; then
+        api_data_path=$(jq -r '.import.api' "$test_plan_path")
+        echo "Creating API \"$(jq -r '.api_definition.name' "$api_data_path")\""
+        create_api_result=$(create_api $api_data_path)
+        if [ $? -ne 0 ]; then
+            echo -e "ERROR: API creation failed\n$create_api_result"
+            exit 1
+        fi
+        imported_api_id="$create_api_result"
+      fi
+      if jq -e '.import | has("key")' "$test_plan_path" >/dev/null 2>&1; then
+        key_data_path=$(jq -r '.import.key' "$test_plan_path")
+        echo -n "Creating Key"
+        create_key_result=$(create_key $key_data_path)
+        if [ $? -ne 0 ]; then
+          echo -e "\nERROR: key creation failed\n$create_key_result"
           exit 1
+        fi
+        imported_key="$create_key_result"
+        echo " $imported_key"
+        if [ "$target_authorization" != "" ]; then
+          echo "WARNING: Created key overrides key defined in test plan. To prevent this warning, set test plan 'authorization' value to an empty string."
+        fi
+        target_authorization="$imported_key"
       fi
-      imported_api_id="$create_api_result"
     fi
-    if jq -e '.import | has("key")' "$test_plan_path" >/dev/null 2>&1; then
-      key_data_path=$(jq -r '.import.key' "$test_plan_path")
-      echo -n "Creating Key"
-      create_key_result=$(create_key $key_data_path)
-      if [ $? -ne 0 ]; then
-        echo -e "\nERROR: key creation failed\n$create_key_result"
-        exit 1
-      fi
-      imported_key="$create_key_result"
-      echo " $imported_key"
-      if [ "$target_authorization" != "" ]; then
-        echo "WARNING: Created key overrides key defined in test plan. To prevent this warning, set test plan 'authorization' value to an empty string."
-      fi
-      target_authorization="$imported_key"
+
+    key_data=$(read_key $target_authorization)
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR: key read failed ($key_data)"
+      exit 1
     fi
+    target_listen_path=$(jq -r '.target.url' "$test_plan_path" | awk -F'/' '{print $4}')
+    read_api_result=$(read_api_by_listen_path "/$target_listen_path/")
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR: API read by listen path failed\n$read_api_result"
+      exit 1
+    fi
+    target_api_api_id=$(echo $read_api_result | jq -r '.api_definition.api_id')
+    key_rate=$(echo "$key_data" | jq -r --arg api_id "$target_api_api_id" '.access_rights[$api_id].limit.rate')
+    key_rate_period=$(echo "$key_data" | jq -r --arg api_id "$target_api_api_id" '.access_rights[$api_id].limit.per')
+    analytics_data=""
+
+    echo "Generating $load_total requests @ ${load_rate}rps at $target_url"
+
+    # wait 2 seconds to ensure there is a reasonable gap between the batches of analytics records generated by different test plans
+    sleep 2
+
+    current_time=$(date +%s)
+    generate_requests $load_clients $load_rate $load_total $target_url $target_authorization
+
+    echo "Reading analytics"
+    analytics_data=$(get_analytics_data $current_time $load_total)
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR Problem getting analytics data:\n$analytics_data"
+      exit 1
+    fi
+
+    echo "Parsing analytics"
+    parsed_data_file_path="output/rl-parsed-data-$test_plan_file_name.csv"
+    jq -r '.data[] | [.ResponseCode, .TimeStamp] | join(" ")' <<< "$analytics_data" > $parsed_data_file_path
   fi
-
-  key_data=$(read_key $target_authorization)
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: key read failed ($key_data)"
-    exit 1
-  fi
-  target_listen_path=$(jq -r '.target.url' "$test_plan_path" | awk -F'/' '{print $4}')
-  target_api=$(read_api_by_listen_path "/$target_listen_path/")
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: API read by listen path failed\n$target_api"
-    exit 1
-  fi
-  target_api_api_id=$(echo $target_api | jq -r '.api_definition.api_id')
-  key_rate=$(echo "$key_data" | jq -r --arg api_id "$target_api_api_id" '.access_rights[$api_id].limit.rate')
-  key_rate_period=$(echo "$key_data" | jq -r --arg api_id "$target_api_api_id" '.access_rights[$api_id].limit.per')
-  analytics_data=""
-
-  echo "Generating $load_total requests @ ${load_rate}rps at $target_url"
-
-  # wait 2 seconds to ensure there is a reasonable gap between the batches of analytics records generated by different test plans
-  sleep 2
-
-  current_time=$(date +%s)
-  generate_requests $load_clients $load_rate $load_total $target_url $target_authorization
-
-  echo "Reading analytics"
-  analytics_data=$(get_analytics_data $current_time $load_total)
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR Problem getting analytics data:\n$analytics_data"
-    exit 1
-  fi
-
-  echo "Parsing analytics"
-  parsed_data_file_path="output/rl-parsed-data-$test_plan_file_name.csv"
-  jq -r '.data[] | [.ResponseCode, .TimeStamp] | join(" ")' <<< "$analytics_data" > $parsed_data_file_path
-
+  
   echo "Analysing data"
   awk -v test_plan_file_name="$test_plan_file_name" \
     -v rate_limit="$key_rate" \
@@ -298,7 +309,7 @@ for test_plan in "${test_plans_to_run[@]}"; do
 
   if [ "$export_analytics" == "true" ]; then
     echo "Exporting analytics data"
-    echo "$analytics_data" > .context-data/rl-test-analytics-export-$test_plan_file_name.json
+    echo "$analytics_data" > output/rl-test-analytics-export-$test_plan_file_name.json
   fi
 
   # data cleanup
