@@ -1,0 +1,11 @@
+{
+    "target": {
+        "url": "http://localhost:8080/basic-open-api/get",
+        "authorization": "",
+        "load": {
+            "clients": 1,
+            "rate": 50,
+            "total": 200
+        }
+    }
+}
