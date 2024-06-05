@@ -203,7 +203,7 @@ get_analytics_data() {
 
 # clear the test output files
 rm output/*.csv 2>/dev/null
-test_plan_run=false
+test_plan_complete=false
 
 for test_plan in "${test_plans_to_run[@]}"; do
   test_plan_path="test-plans/$test_plan.json"
@@ -215,8 +215,7 @@ for test_plan in "${test_plans_to_run[@]}"; do
   fi
 
   echo -e "\nRunning test plan \"$test_plan_file_name\""
-  test_plan_run=true
-
+  
   # if test plan provides analytics data, then just read the test parameters and skip to analysis
   if jq -e '.import | has("analytics")' "$test_plan_path" >/dev/null 2>&1; then
     parsed_data_file_path=$(jq -r '.import.analytics' "$test_plan_path")
@@ -311,12 +310,13 @@ for test_plan in "${test_plans_to_run[@]}"; do
     echo "Exporting analytics data"
     echo "$analytics_data" > output/rl-test-analytics-export-$test_plan_file_name.json
   fi
-
+  
+  test_plan_complete=true
   # data cleanup
   remove_created_data
 done
 
-if [ "$test_plan_run" = "true" ]; then
+if [ "$test_plan_complete" = "true" ]; then
   echo -e "\nTest plans complete"
 
   if [ "$show_detail" = "true" ]; then
