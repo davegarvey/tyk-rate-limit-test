@@ -13,3 +13,4 @@ test-plans/*.json
 !test-plans/tp001.json
 !test-plans/tp002.json
 !test-plans/tp003.json
+!test-plans/tp004.json

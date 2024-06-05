@@ -1,0 +1,10 @@
+{
+    "import": {
+        "analytics": "data/analytics/my-analytics.csv"
+    },
+    "test": {
+        "keyRateLimit": 30,
+        "keyRateLimitPeriod": 1,
+        "loadRequestRate": 50
+    }
+}
